@@ -13,15 +13,17 @@
 #include <y9inc/random.h>
 #include <y9inc/time.h>
 #include <y9inc/string.h>
+#include <CLI/CLI.hpp>
 
 
 std::mutex mtx;
 boost::dynamic_bitset<> thids;
 
-namespace param {
-	uint8_t size(5), maxNum(75);
-	int threadNum(120), loopNum(100000);
-}
+struct Param {
+	uint8_t size, maxNum;
+	int threadNum, loopNum;
+};
+
 
 // ビンゴカード 論理
 struct Stat {
@@ -86,20 +88,20 @@ struct Card {
 	}
 };
 
-void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum) {
+void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum, const Param& param) {
 	Stat stat;
 	for (int i = 1; i <= lpNum; ++i) {
 		
 		std::vector<std::vector<uint8_t>> grid;
-		grid.resize(param::size);
+		grid.resize(param.size);
 		std::bitset<256> exists;
-		for (int h = 0; h < param::size; ++h) {
-			grid[h].resize(param::size);
+		for (int h = 0; h < param.size; ++h) {
+			grid[h].resize(param.size);
 			// fill
-			for (int w = 0; w < param::size; ++w) {
+			for (int w = 0; w < param.size; ++w) {
 				uint8_t randNum;
 				while (true) {
-					randNum = randomNum(1,param::maxNum);
+					randNum = randomNum(1,param.maxNum);
 					if (exists[randNum]) continue;
 					exists.set(randNum);
 					break;
@@ -112,7 +114,7 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum) {
 		Card card(grid);
 		exists.reset();
 		while (!card.isBingo() && !st.stop_requested()) {
-			uint8_t randNum = randomNum(1,param::maxNum);
+			uint8_t randNum = randomNum(1,param.maxNum);
 			if (exists[randNum]) continue;
 			++stat.count;
 			exists.set(randNum);
@@ -133,36 +135,27 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum) {
 	thids.set(thid);
 }
 
-void parseCLIArg(const std::vector<std::string>& arg) {
-	bool l1 = true;
-	for (const std::string& p: arg) {
-		if (l1) { // argv[0]を飛ばす
-			l1 = false;
-			continue;
-		}
-		if (!p.starts_with("-")) throw std::runtime_error("引数エラー [-]");
-		switch (p[1]) {
-			case 's': param::size = std::stoi(p.substr(2)); break;
-			case 'n': param::maxNum = std::stoi(p.substr(2)); break;
-			case 't': param::threadNum = std::stoi(p.substr(2)); break;
-			case 'l': param::loopNum = std::stoi(p.substr(2)); break;
-			default: throw std::runtime_error("引数エラー [" + std::string{p[1]} + "]");
-		}
-	}
-	if (param::size*param::size >= param::maxNum) throw std::runtime_error("Size^2 >= MaxNum");
-}
 
 int main(int argc, char *argv[]) {
-	parseCLIArg(st::charV(argc,argv));
+	CLI::App app;
+	Param param;
+	app.add_flag("-s", param.size)->default_val(5);
+	app.add_flag("--max, -n", param.maxNum)->default_val(75);
+	app.add_flag("-t", param.threadNum)->default_val(120);
+	app.add_flag("-l", param.loopNum)->default_val(100000);
+
+	CLI11_PARSE(app,argc,argv)
+	if (param.size*param.size >= param.maxNum) throw std::runtime_error("Size^2 >= MaxNum");
 	
-	thids.resize(param::threadNum+1,false);
+
+	thids.resize(param.threadNum+1,false);
 	
-	int surplus = param::loopNum % param::threadNum;
-	int npt = param::loopNum / param::threadNum;
+	int surplus = param.loopNum % param.threadNum;
+	int npt = param.loopNum / param.threadNum;
 	
-	for (int i = 0; i < param::threadNum; ++i)
-		new std::jthread(calMain,i,npt);
-	new std::jthread(calMain,param::threadNum,surplus);
+	for (int i = 0; i < param.threadNum; ++i)
+		new std::jthread(calMain,i,npt,param);
+	new std::jthread(calMain,param.threadNum,surplus,param);
 	
 	size_t sec = 0;
 	while (true) {
@@ -172,5 +165,5 @@ int main(int argc, char *argv[]) {
 	}
 	
 	std::cout << sec << "秒\n\t横: " << std::to_string(g_stat.row) << "\n\t縦: " << std::to_string(g_stat.column) << "\n\t斜: " << std::to_string(g_stat.diagonal)
-			  << "\n試行回数平均: " << std::to_string(static_cast<double>(g_stat.count) / param::loopNum) << "\n";
+			  << "\n試行回数平均: " << std::to_string(static_cast<double>(g_stat.count) / param.loopNum) << "\n";
 }

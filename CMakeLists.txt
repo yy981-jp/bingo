@@ -8,10 +8,13 @@ set(CMAKE_CXX_STANDARD 23)
 # ソースファイル
 file(GLOB SOURCES src/*.cpp)
 
+add_subdirectory(external/CLI11)
+
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
 	${CMAKE_SOURCE_DIR}/external/
+	external/CLI11/include
 )
 
 # ライブラリをリンク
