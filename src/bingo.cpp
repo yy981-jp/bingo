@@ -35,13 +35,16 @@ struct Card {
 	std::unordered_map<uint8_t, std::pair<int, int>> pos; // 数字→位置
 	std::vector<std::vector<bool>> marked; // マーク済み状態
 	uint8_t h, w;
+
+	uint8_t type = 0;
 	
-	enum class Type {
-		none, row, column, diagonal
-	} type;
+	enum Type: uint8_t {
+		row			= 1 << 0,
+		column		= 1 << 1,
+		diagonal	= 1 << 2,
+	};
 
 	Card(const std::vector<std::vector<uint8_t>>& grid) {
-		type = Type::none;
 		h = grid.size();
 		w = grid[0].size();
 		marked.assign(h, std::vector<bool>(w, false));
@@ -66,8 +69,7 @@ struct Card {
 		// 行
 		for (int i = 0; i < h; ++i)
 			if (std::all_of(marked[i].begin(), marked[i].end(), [](bool b){return b;})) {
-				type = Type::row;
-				return true;
+				type |= Type::row;
 			}
 		// 列
 		for (int j = 0; j < w; ++j) {
@@ -75,8 +77,7 @@ struct Card {
 			for (int i = 0; i < h; ++i)
 				if (!marked[i][j]) ok = false;
 			if (ok) {
-				type = Type::column;
-				return true;
+				type |= Type::column;
 			}
 		}
 		// 斜め
@@ -86,10 +87,10 @@ struct Card {
 			if (!marked[i][w - 1 - i]) diag2 = false;
 		}
 		if (diag1 || diag2) {
-			type = Type::diagonal;
-			return true;
+			type |= Type::diagonal;
 		}
-		return false;
+
+		return type;
 	}
 };
 
@@ -130,11 +131,10 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum, const Pa
 			exists.set(randNum);
 			card.mark(randNum);
 		}
-		switch (card.type) {
-			case Card::Type::row: ++stat.row; break;
-			case Card::Type::column: ++stat.column; break;
-			case Card::Type::diagonal: ++stat.diagonal; break;
-		}
+		
+		if (card.type & Card::Type::row) stat.row++;
+		if (card.type & Card::Type::column) stat.column++;
+		if (card.type & Card::Type::diagonal) stat.diagonal++;
 	}
 	
 	std::lock_guard<std::mutex> lock(mtx);
@@ -149,7 +149,7 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum, const Pa
 int main(int argc, char *argv[]) {
 	CLI::App app;
 	Param param;
-	app.add_option("-s", param.size)->default_val(5);
+	app.add_option("-s", param.size)->default_val(3);
 	app.add_option("-n", param.maxNum)->default_val(75);
 	app.add_option("-t", param.threadNum)->default_val(120);
 	app.add_option("-l", param.loopNum)->default_val(100000);
