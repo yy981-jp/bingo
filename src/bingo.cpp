@@ -20,8 +20,9 @@ std::mutex mtx;
 boost::dynamic_bitset<> thids;
 
 struct Param {
-	uint8_t size, maxNum;
+	int size, maxNum;
 	int threadNum, loopNum;
+	std::pair<int,int> markPos;
 };
 
 
@@ -55,6 +56,10 @@ struct Card {
 		auto [i, j] = it->second;
 		marked[i][j] = true;
 		return true;
+	}
+
+	void markPos(int x, int y) {
+		marked[x][y] = true;
 	}
 
 	bool isBingo() {
@@ -112,6 +117,11 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum, const Pa
 		
 		// ビンゴ試行
 		Card card(grid);
+
+		if (param.markPos != std::pair{-1,-1}) {
+			card.markPos(param.markPos.first,param.markPos.second);
+		}
+		
 		exists.reset();
 		while (!card.isBingo() && !st.stop_requested()) {
 			uint8_t randNum = randomNum(1,param.maxNum);
@@ -139,10 +149,11 @@ void calMain(std::stop_token st, const uint8_t& thid, const int& lpNum, const Pa
 int main(int argc, char *argv[]) {
 	CLI::App app;
 	Param param;
-	app.add_flag("-s", param.size)->default_val(5);
-	app.add_flag("--max, -n", param.maxNum)->default_val(75);
-	app.add_flag("-t", param.threadNum)->default_val(120);
-	app.add_flag("-l", param.loopNum)->default_val(100000);
+	app.add_option("-s", param.size)->default_val(5);
+	app.add_option("-n", param.maxNum)->default_val(75);
+	app.add_option("-t", param.threadNum)->default_val(120);
+	app.add_option("-l", param.loopNum)->default_val(100000);
+	app.add_option("--mark", param.markPos)->default_val(std::array{-1,-1});
 
 	CLI11_PARSE(app,argc,argv)
 	if (param.size*param.size >= param.maxNum) throw std::runtime_error("Size^2 >= MaxNum");
